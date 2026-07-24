@@ -107,7 +107,8 @@ string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,boo
         << abs(comprimento_ia - comprimento_humano) / ((comprimento_ia + comprimento_humano) ) * 100.0
          << "%" << endl;
     }
-    if(comprimento_ia < comprimento_humano) return "IA";
+    double fator = 0.995;
+    if (comprimento_ia < fator * comprimento_humano) return "IA";
     else return "Humano";
 }
 
