@@ -71,6 +71,12 @@ struct Ppm{
         }
     }
     
+    void atualiza_janela(uint8_t atual){
+        janela_atual.push_back(atual);
+        if (janela_atual.size() > (size_t)Kmax)
+            janela_atual.pop_front();
+    }
+
     bool atualiza_contexto(uint8_t atual){
         janela_atual.push_back(atual);
         if (janela_atual.size() > (size_t)Kmax)
@@ -151,8 +157,9 @@ struct Ppm{
 
         if(treino){   // só atualiza os contextos/frequências durante o treino
             arvore.atualiza_frequencia(contexto_inicial, atual);
-            atualiza_contexto(atual);
-        }    
+            arvore.insere_byte_em_contexto(janela_atual);
+        }   
+        atualiza_janela(atual); 
     
         
         // limpar excluidos para processar um byte novo
@@ -215,9 +222,10 @@ struct Ppm{
         bytes_na_janela++;
         if(treino){   // só atualiza os contextos/frequências durante o treino
             arvore.atualiza_frequencia(contexto_inicial, (uint8_t)simbolo_decodificado);
-            atualiza_contexto((uint8_t)simbolo_decodificado);
+            arvore.insere_byte_em_contexto(janela_atual);
         }
-            
+        atualiza_janela((uint8_t)simbolo_decodificado);
+    
         total_simbolos_processados++;
         
         excluidos.clear();
