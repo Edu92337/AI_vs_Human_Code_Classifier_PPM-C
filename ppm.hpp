@@ -113,11 +113,6 @@ struct Ppm{
                     // Remove a injeção temporária antes de terminar
                     contexto->freq_ref(ESCAPE) = 0;
                     contexto->total -= freq_esc;
-
-                    if(equiprovaveis->get_freq(atual) > 0) {
-                        equiprovaveis->freq_ref(atual)--;
-                        equiprovaveis->total--;
-                    }
                     break; // Termina o loop, encontramos o símbolo
                 } 
                 else {
@@ -138,12 +133,7 @@ struct Ppm{
 
         if(codificado == false){
             // Se não codificou em nenhum contexto, codifica com equiprováveis
-            if(aritmetico.encode_byte(atual,equiprovaveis,excluidos)){
-                if(equiprovaveis->get_freq(atual) > 0) {
-                    equiprovaveis->freq_ref(atual)--;
-                    equiprovaveis->total--;
-                }
-            }
+            aritmetico.encode_byte(atual, equiprovaveis, excluidos);
         }
 
         // atualiza o tamanho emitido para o símbolo atual
@@ -157,11 +147,12 @@ struct Ppm{
 
         if(treino){   // só atualiza os contextos/frequências durante o treino
             arvore.atualiza_frequencia(contexto_inicial, atual);
+        }
+        atualiza_janela(atual);
+        if(treino){
             arvore.insere_byte_em_contexto(janela_atual);
-        }   
-        atualiza_janela(atual); 
-    
-        
+        }
+
         // limpar excluidos para processar um byte novo
         excluidos.clear();
 
