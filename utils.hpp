@@ -39,7 +39,7 @@ vector<string> arquivos_humano{
 };
 
 void codifica_arquivo(ifstream& arquivo, Ppm& modelo){
-    modelo.janela_atual.clear();
+    modelo.janela_atual.clear(); // Limpa a janela antes de começar a codificar o novo arquivo
     char byte;
     while(arquivo.get(byte)){
         modelo.processa_simbolo((uint8_t)byte);
@@ -88,7 +88,7 @@ void treina_modelo(Ppm& modelo,bool ia, string tipo){
     }
 }
 
-string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,bool teste_unitario){
+string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,bool teste_unitario,double fator = 0.995){
     ifstream arquivo(path_arquivo, ios::binary);
     if(!arquivo.is_open()){
         cerr << "Erro ao abrir: " << path_arquivo << endl;
@@ -107,7 +107,7 @@ string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,boo
         << abs(comprimento_ia - comprimento_humano) / ((comprimento_ia + comprimento_humano) ) * 100.0
          << "%" << endl;
     }
-    double fator = 0.995;
+
     if (comprimento_ia < fator * comprimento_humano) return "IA";
     else return "Humano";
 }
