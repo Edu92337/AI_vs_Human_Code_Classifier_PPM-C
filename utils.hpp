@@ -42,7 +42,7 @@ void codifica_arquivo(ifstream& arquivo, Ppm& modelo){
     modelo.aritmetico.low  = 0;
     modelo.aritmetico.high = (uint32_t)Codificador_aritmetico::TOP;
     modelo.aritmetico.bits_pendentes = 0;
-
+    modelo.inicia_equiprovaveis();
     modelo.janela_atual.clear(); // Limpa a janela antes de começar a codificar o novo arquivo
     char byte;
     while(arquivo.get(byte)){
@@ -92,7 +92,7 @@ void treina_modelo(Ppm& modelo,bool ia, string tipo){
     }
 }
 
-string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,bool teste_unitario,double fator = 1){
+string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,bool teste_unitario,double fator = 1.05){
     ifstream arquivo(path_arquivo, ios::binary);
     if(!arquivo.is_open()){
         cerr << "Erro ao abrir: " << path_arquivo << endl;
@@ -181,4 +181,3 @@ void teste_arquivo(Ppm& modelo_ia,Ppm&modelo_humano,string& path_teste){
     string classe = classificador(modelo_ia,modelo_humano,path_teste,true);
     cout << "Arquivo: " << path_teste << " -> Classe: " << classe << endl;
 }
-
