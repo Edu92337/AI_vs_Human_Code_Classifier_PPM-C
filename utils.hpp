@@ -14,7 +14,6 @@ using namespace std;
 namespace fs = filesystem;
 
 const string BASE = "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset_resplit";
-
 // Monta o caminho para qualquer subconjunto do dataset:
 string caminho_dataset(const string& conjunto, const string& classe, const string& tipo){
     return BASE + "/" + conjunto + "/" + classe + "/" + tipo;
@@ -40,7 +39,7 @@ void codifica_arquivo(ifstream& arquivo, Ppm& modelo){
     modelo.aritmetico.finaliza_codificacao();
     
 }
-
+// Calcula o comprimento médio do arquivo em bits por símbolo, usando o modelo fornecido.
 double comprimento_do_arquivo(ifstream& arquivo, Ppm& modelo){
     uint64_t bits_antes = modelo.aritmetico.bits_emitidos_total;
     uint64_t simbolos_antes = modelo.total_simbolos_processados;
@@ -95,6 +94,8 @@ string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo, bo
     if (score < threshold) return "IA";
     else return "Humano";
 }
+
+
 void teste_geral(Ppm& modelo_ia, Ppm& modelo_humano, string& path_ia, string& path_humano, double threshold){
     string path;
     long long corretos_humano = 0, total_humano = 0;
@@ -229,9 +230,12 @@ void exporta_csv_comprimentos_tipo(Ppm& modelo_ia, Ppm& modelo_humano, const str
     exporta_csv_comprimentos(modelo_ia, modelo_humano, path_ia, path_humano, tipo);
 }
 
+// Coleta os scores (comprimento_ia - comprimento_humano) de todos os arquivos em uma pasta plana (sem subpastas),
+// filtrando pelo prefixo do nome do arquivo, se fornecido.
 void coleta_scores_flat(Ppm& modelo_ia, Ppm& modelo_humano, const string& path,
                         bool rotulo_eh_ia, vector<pair<double,bool>>& saida,
                         const string& prefixo_filtro = ""){
+    
     error_code ec;
     for(auto& entrada : fs::directory_iterator(path, fs::directory_options::skip_permission_denied, ec)){
         if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
@@ -260,13 +264,14 @@ void coleta_scores_flat(Ppm& modelo_ia, Ppm& modelo_humano, const string& path,
 // Calcula o threshold ótimo por Youden's J a partir dos scores coletados.
 // Convenção: classifica IA se score < threshold.
 double calcula_threshold_youden(vector<pair<double,bool>>& scores_rotulos){
+    // Ordena os scores e calcula TPR, FPR e J para cada ponto de corte possível.
+    // Retorna o threshold que maximiza J = TPR - FPR.
     if(scores_rotulos.empty()) return 0.0;
 
     sort(scores_rotulos.begin(), scores_rotulos.end());
 
     long long total_ia = 0, total_humano = 0;
-    for(auto& [s, eh_ia] : scores_rotulos)
-        eh_ia ? total_ia++ : total_humano++;
+    for(auto& [s, eh_ia] : scores_rotulos) eh_ia ? total_ia++ : total_humano++;
 
     if(total_ia == 0 || total_humano == 0){
         cerr << "[AVISO] Uma das classes não tem amostras suficientes para calibrar threshold." << endl;
@@ -282,8 +287,8 @@ double calcula_threshold_youden(vector<pair<double,bool>>& scores_rotulos){
         auto [s, eh_ia] = scores_rotulos[i];
         eh_ia ? acumulado_ia++ : acumulado_humano++;
 
-        bool proximo_diferente = (i + 1 == scores_rotulos.size()) ||
-                                  (scores_rotulos[i+1].first != s);
+        bool proximo_diferente = (i + 1 == scores_rotulos.size()) || (scores_rotulos[i+1].first != s);
+        
         if(!proximo_diferente) continue;
 
         double tpr = (double)acumulado_ia / total_ia;
@@ -291,7 +296,9 @@ double calcula_threshold_youden(vector<pair<double,bool>>& scores_rotulos){
         double j = tpr - fpr;
 
         if(j > melhor_j){
+            // Atualiza o melhor threshold para o ponto médio entre este score e o próximo score diferente
             melhor_j = j;
+            // Se este é o último score, usamos um valor maior que ele para o próximo score
             double proximo_score = (i + 1 < scores_rotulos.size()) ? scores_rotulos[i+1].first : s + 1.0;
             melhor_threshold = (s + proximo_score) / 2.0;
         }
