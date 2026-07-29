@@ -49,6 +49,14 @@ struct Ppm{
         equiprovaveis->total = 256;
     }
 
+    void reinicia_modelo(){
+        aritmetico.low  = 0;
+        aritmetico.high = (uint32_t)Codificador_aritmetico::TOP;
+        aritmetico.bits_pendentes = 0;
+        inicia_equiprovaveis();
+        janela_atual.clear(); // Limpa a janela antes de começar a codificar o novo arquivo
+    }
+
     bool existe_contexto(No* contexto,uint8_t simbolo){
         return contexto->get_freq(simbolo) > 0;
     }

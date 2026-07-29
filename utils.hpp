@@ -27,11 +27,7 @@ string caminho_dataset_flat(const string& conjunto, const string& classe){
 }
 
 void codifica_arquivo(ifstream& arquivo, Ppm& modelo){
-    modelo.aritmetico.low  = 0;
-    modelo.aritmetico.high = (uint32_t)Codificador_aritmetico::TOP;
-    modelo.aritmetico.bits_pendentes = 0;
-    modelo.inicia_equiprovaveis();
-    modelo.janela_atual.clear(); // Limpa a janela antes de começar a codificar o novo arquivo
+    modelo.reinicia_modelo();
     char byte;
     while(arquivo.get(byte)){
         modelo.processa_simbolo((uint8_t)byte);
