@@ -45,6 +45,8 @@ int main(int argc, char* argv[]){
         modelo_ia.treino = false;
         modelo_humano.treino = false;
 
+        double threshold = calibra_threshold_validacao_tipo(modelo_ia, modelo_humano, tipo);
+        cout << "[INFO] Threshold (usar no plot_metricas.py --threshold): "<< threshold << endl;
         exporta_csv_comprimentos_tipo(modelo_ia, modelo_humano, tipo);
         return 0;
     }

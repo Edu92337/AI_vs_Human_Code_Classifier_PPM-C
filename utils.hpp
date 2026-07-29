@@ -26,6 +26,52 @@ string caminho_dataset_flat(const string& conjunto, const string& classe){
     return BASE + "/" + conjunto + "/" + classe;
 }
 
+
+void diagnostico_scores(const vector<pair<double,bool>>& scores_rotulos,
+                        const string& rotulo_contexto)
+{
+    long long n_ia = 0, n_humano = 0;
+    double soma_ia = 0.0, soma_humano = 0.0;
+
+    for(const auto& [score, eh_ia] : scores_rotulos){
+        if(eh_ia){
+            n_ia++;
+            soma_ia += score;
+        }else{
+            n_humano++;
+            soma_humano += score;
+        }
+    }
+
+    double media_ia     = (n_ia > 0) ? soma_ia / n_ia : 0.0;
+    double media_humano = (n_humano > 0) ? soma_humano / n_humano : 0.0;
+
+    double var_ia = 0.0;
+    double var_humano = 0.0;
+
+    for(const auto& [score, eh_ia] : scores_rotulos){
+        if(eh_ia)
+            var_ia += (score - media_ia) * (score - media_ia);
+        else
+            var_humano += (score - media_humano) * (score - media_humano);
+    }
+
+    double desvio_ia =
+        (n_ia > 1) ? sqrt(var_ia / (n_ia - 1)) : 0.0;
+
+    double desvio_humano =
+        (n_humano > 1) ? sqrt(var_humano / (n_humano - 1)) : 0.0;
+
+    cout << "[DIAGNOSTICO " << rotulo_contexto << "] "
+         << "IA: n=" << n_ia
+         << " media=" << media_ia
+         << " desvio=" << desvio_ia
+         << " | Humano: n=" << n_humano
+         << " media=" << media_humano
+         << " desvio=" << desvio_humano
+         << endl;
+}
+
 void codifica_arquivo(ifstream& arquivo, Ppm& modelo){
     modelo.reinicia_modelo();
     char byte;
@@ -135,6 +181,7 @@ void teste_geral(Ppm& modelo_ia, Ppm& modelo_humano, string& path_ia, string& pa
         total_ia++;
     }
 
+    diagnostico_scores(scores, "TESTE");
     double acuracia_humano = 100.0 * corretos_humano / total_humano;
     double acuracia_ia = 100.0 * corretos_ia / total_ia;
     double acuracia_total = 100.0 * (corretos_humano + corretos_ia) / (total_humano + total_ia);
@@ -166,13 +213,17 @@ void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
         cerr << "Erro ao criar CSV: " << nome_csv << endl;
         return;
     }
-    csv << "arquivo,tipo,comprimento_ia,comprimento_humano,rotulo_real\n";
+    csv << "arquivo,tipo,tamanho_bytes,comprimento_ia,comprimento_humano,rotulo_real\n";
 
     error_code ec;
 
     // Arquivos Humanos
     for(auto& entrada : fs::recursive_directory_iterator(path_humano, fs::directory_options::skip_permission_denied, ec)){
-        if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
+        uintmax_t tamanho = fs::file_size(entrada.path(), ec);
+        if(ec){
+            tamanho = 0;
+            ec.clear();
+        }
         if(!fs::is_regular_file(entrada.status())) continue;
 
         ifstream arquivo(entrada.path(), ios::binary);
@@ -188,6 +239,7 @@ void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
 
         csv << "\"" << entrada.path().string() << "\","
             << tipo << ","
+            << tamanho << ","
             << comp_ia << ","
             << comp_humano << ","
             << "Humano\n";
@@ -195,7 +247,11 @@ void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
 
     // Arquivos IA
     for(auto& entrada : fs::recursive_directory_iterator(path_ia, fs::directory_options::skip_permission_denied, ec)){
-        if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
+        uintmax_t tamanho = fs::file_size(entrada.path(), ec);
+        if(ec){
+            tamanho = 0;
+            ec.clear();
+        }
         if(!fs::is_regular_file(entrada.status())) continue;
 
         ifstream arquivo(entrada.path(), ios::binary);
@@ -211,6 +267,7 @@ void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
 
         csv << "\"" << entrada.path().string() << "\","
             << tipo << ","
+            << tamanho << ","
             << comp_ia << ","
             << comp_humano << ","
             << "IA\n";
@@ -314,6 +371,7 @@ double calibra_threshold_validacao(Ppm& modelo_ia, Ppm& modelo_humano,
     vector<pair<double,bool>> scores;
     coleta_scores_flat(modelo_ia, modelo_humano, path_validacao_ia, true, scores, prefixo_filtro);
     coleta_scores_flat(modelo_ia, modelo_humano, path_validacao_humano, false, scores, prefixo_filtro);
+    diagnostico_scores(scores, "VALIDACAO");
     return calcula_threshold_youden(scores);
 }
 
