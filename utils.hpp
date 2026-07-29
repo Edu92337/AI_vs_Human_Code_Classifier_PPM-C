@@ -181,3 +181,81 @@ void teste_arquivo(Ppm& modelo_ia,Ppm&modelo_humano,string& path_teste){
     string classe = classificador(modelo_ia,modelo_humano,path_teste,true);
     cout << "Arquivo: " << path_teste << " -> Classe: " << classe << endl;
 }
+
+
+void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
+                               string& path_ia, string& path_humano,
+                               const string& tipo)
+{
+    string nome_csv = "comprimentos_" + tipo + ".csv";
+    ofstream csv(nome_csv);
+    if(!csv.is_open()){
+        cerr << "Erro ao criar CSV: " << nome_csv << endl;
+        return;
+    }
+    csv << "arquivo,tipo,comprimento_ia,comprimento_humano,rotulo_real\n";
+
+    error_code ec;
+
+    // ---- Arquivos HUMANOS ----
+    for(auto& entrada : fs::recursive_directory_iterator(path_humano, fs::directory_options::skip_permission_denied, ec)){
+        if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
+        if(!fs::is_regular_file(entrada.status())) continue;
+
+        ifstream arquivo(entrada.path(), ios::binary);
+        if(!arquivo.is_open()){
+            cerr << "Erro ao abrir: " << entrada.path() << endl;
+            continue;
+        }
+
+        double comp_ia = comprimento_do_arquivo(arquivo, modelo_ia);
+        arquivo.clear();
+        arquivo.seekg(0);
+        double comp_humano = comprimento_do_arquivo(arquivo, modelo_humano);
+
+        csv << "\"" << entrada.path().string() << "\","
+            << tipo << ","
+            << comp_ia << ","
+            << comp_humano << ","
+            << "Humano\n";
+    }
+
+    // ---- Arquivos IA ----
+    for(auto& entrada : fs::recursive_directory_iterator(path_ia, fs::directory_options::skip_permission_denied, ec)){
+        if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
+        if(!fs::is_regular_file(entrada.status())) continue;
+
+        ifstream arquivo(entrada.path(), ios::binary);
+        if(!arquivo.is_open()){
+            cerr << "Erro ao abrir: " << entrada.path() << endl;
+            continue;
+        }
+
+        double comp_ia = comprimento_do_arquivo(arquivo, modelo_ia);
+        arquivo.clear();
+        arquivo.seekg(0);
+        double comp_humano = comprimento_do_arquivo(arquivo, modelo_humano);
+
+        csv << "\"" << entrada.path().string() << "\","
+            << tipo << ","
+            << comp_ia << ","
+            << comp_humano << ","
+            << "IA\n";
+    }
+
+    csv.close();
+    cout << "[INFO] CSV exportado: " << nome_csv << endl;
+}
+
+void exporta_csv_comprimentos_tipo(Ppm& modelo_ia, Ppm& modelo_humano, const string& tipo)
+{
+    if(tipo == "c"){
+        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[0], arquivos_humano[0], tipo);
+    }else if(tipo == "cpp"){
+        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[1], arquivos_humano[1], tipo);
+    }else if(tipo == "java"){
+        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[2], arquivos_humano[2], tipo);
+    }else if(tipo == "py"){
+        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[3], arquivos_humano[3], tipo);
+    }
+}
