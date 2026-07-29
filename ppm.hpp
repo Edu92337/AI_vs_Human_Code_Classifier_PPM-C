@@ -78,10 +78,10 @@ struct Ppm{
     }
 
     bool atualiza_contexto(uint8_t atual){
-        janela_atual.push_back(atual);
-        if (janela_atual.size() > (size_t)Kmax)
-            janela_atual.pop_front();
-        return arvore.insere_byte_em_contexto(janela_atual);
+        atualiza_janela(atual);
+        if (treino)
+            return arvore.insere_byte_em_contexto(janela_atual);
+        return true;
     }
 
     void processa_simbolo(uint8_t atual){
@@ -90,9 +90,6 @@ struct Ppm{
         bits_inicial = aritmetico.bits_emitidos_total;
         No* contexto = arvore.busca_contexto_byte(janela_atual);
         No* contexto_inicial = contexto;
-        //atualiza a janela para as métricas
-        
-        
         // percorre, subindo, procurando onde codificar o simbolo
         // a raiz está inclusa
         while(contexto) {
@@ -148,10 +145,7 @@ struct Ppm{
         if(treino){   // só atualiza os contextos/frequências durante o treino
             arvore.atualiza_frequencia(contexto_inicial, atual);
         }
-        atualiza_janela(atual);
-        if(treino){
-            arvore.insere_byte_em_contexto(janela_atual);
-        }
+        atualiza_contexto(atual);
 
         // limpar excluidos para processar um byte novo
         excluidos.clear();
