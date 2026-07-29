@@ -50,6 +50,7 @@ int main(int argc, char* argv[]){
     }
 
     if(argc == 4){
+        // Modo teste de arquivo específico: ./a <Kmax> <path_arquivo> <tipo>
         k = atoi(argv[1]);
         string path_arquivo = argv[2];
         string tipo = argv[3];
@@ -59,8 +60,11 @@ int main(int argc, char* argv[]){
         treina_modelo(modelo_humano,false,tipo);
         modelo_ia.treino = false;
         modelo_humano.treino = false;
-        teste_arquivo(modelo_ia,modelo_humano,path_arquivo);
+        double threshold = calibra_threshold_validacao_tipo(modelo_ia, modelo_humano, tipo);
+
+        teste_arquivo(modelo_ia,modelo_humano,path_arquivo,threshold);
     }else {
+        // Modo teste do dataset inteiro: ./a <Kmax> <tipo>
         k = atoi(argv[1]);
         string tipo = argv[2];
         Ppm modelo_ia(k,true);
@@ -71,7 +75,9 @@ int main(int argc, char* argv[]){
 
         modelo_ia.treino = false;
         modelo_humano.treino = false;
-        teste_geral_tipo(modelo_ia,modelo_humano,tipo);
+        double threshold = calibra_threshold_validacao_tipo(modelo_ia, modelo_humano, tipo);
+
+        teste_geral_tipo(modelo_ia,modelo_humano,tipo,threshold);
     }
 
     return 0;
