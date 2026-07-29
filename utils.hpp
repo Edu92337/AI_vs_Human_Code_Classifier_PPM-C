@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <system_error>
 #include <cstdlib>
+#include <algorithm>
+#include <cmath>
 #include "codificador_aritmetico.hpp"
 #include "estrutura_contexto.hpp"
 #include "ppm.hpp"
@@ -11,32 +13,19 @@
 using namespace std;
 namespace fs = filesystem;
 
-vector<string>arquivos_ia_treino{
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_treino/c",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_treino/cpp",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_treino/java",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_treino/py"
-};
-vector<string>arquivos_humano_treino{
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_treino/c",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_treino/cpp",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_treino/java",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_treino/py"  
-};
+const string BASE = "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset_resplit";
 
-vector<string> arquivos_ia = {
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_teste/c",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_teste/cpp",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_teste/java",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/ai_teste/py"
-};
+// Monta o caminho para qualquer subconjunto do dataset:
+string caminho_dataset(const string& conjunto, const string& classe, const string& tipo){
+    return BASE + "/" + conjunto + "/" + classe + "/" + tipo;
+}
 
-vector<string> arquivos_humano{
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_teste/c",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_teste/cpp",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_teste/java",
-    "/home/eduardo/Faculdade/Introdução a Teoria da Informação/Projeto-2/dataset/human_teste/py"
-};
+// Para pastas SEM subpasta por linguagem (ex: dataset_validacao/validacao_ia,
+// onde os arquivos de todas as linguagens ficam juntos, diferenciados só
+// pelo prefixo do nome: "c__", "cpp__", "java__", "py__").
+string caminho_dataset_flat(const string& conjunto, const string& classe){
+    return BASE + "/" + conjunto + "/" + classe;
+}
 
 void codifica_arquivo(ifstream& arquivo, Ppm& modelo){
     modelo.aritmetico.low  = 0;
@@ -65,18 +54,7 @@ double comprimento_do_arquivo(ifstream& arquivo, Ppm& modelo){
 
 void treina_modelo(Ppm& modelo,bool ia, string tipo){
     error_code ec;
-    string path;
-    if(ia){
-        if(tipo == "c") path = arquivos_ia_treino[0];
-        else if(tipo == "cpp") path = arquivos_ia_treino[1];
-        else if(tipo == "java") path = arquivos_ia_treino[2];
-        else if(tipo == "py") path = arquivos_ia_treino[3];
-    }else{
-        if(tipo == "c") path = arquivos_humano_treino[0];
-        else if(tipo == "cpp") path = arquivos_humano_treino[1];
-        else if(tipo == "java") path = arquivos_humano_treino[2];
-        else if(tipo == "py") path = arquivos_humano_treino[3];
-    }
+    string path = caminho_dataset("dataset_treino_efetivo", ia ? "ai_treino" : "human_treino", tipo);
     
     for(auto& entrada : fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec)){
         if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
@@ -92,7 +70,7 @@ void treina_modelo(Ppm& modelo,bool ia, string tipo){
     }
 }
 
-string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,bool teste_unitario,double fator = 1.05){
+string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo, bool teste_unitario, double threshold){
     ifstream arquivo(path_arquivo, ios::binary);
     if(!arquivo.is_open()){
         cerr << "Erro ao abrir: " << path_arquivo << endl;
@@ -103,82 +81,80 @@ string classificador(Ppm& modelo_ia, Ppm& modelo_humano, string path_arquivo,boo
     arquivo.clear();
     arquivo.seekg(0);
     double comprimento_humano = comprimento_do_arquivo(arquivo, modelo_humano);
+
+    double score = comprimento_ia - comprimento_humano;
+
     if(teste_unitario){
         cout << "Arquivo: " << path_arquivo << endl;
         cout << "Comprimento IA: " << comprimento_ia << endl;
         cout << "Comprimento Humano: " << comprimento_humano << endl;
-        cout <<"Margem de erro percentual : "
-        << abs(comprimento_ia - comprimento_humano) / ((comprimento_ia + comprimento_humano) ) * 100.0
-         << "%" << endl;
+        cout << "Score (ia - humano): " << score << endl;
+        cout << "Threshold usado: " << threshold << endl;
     }
 
-    if (comprimento_ia < fator * comprimento_humano) return "IA";
+    if (score < threshold) return "IA";
     else return "Humano";
 }
-
-void teste_geral(Ppm& modelo_ia,Ppm& modelo_humano,string& path_ia, string& path_humano){
+void teste_geral(Ppm& modelo_ia, Ppm& modelo_humano, string& path_ia, string& path_humano, double threshold){
     string path;
     long long corretos_humano = 0, total_humano = 0;
     long long corretos_ia = 0, total_ia = 0;
-    // TESTE DOS CÓDIGOS HUMANOS
+    vector<pair<double,bool>> scores; // para diagnóstico, mesmo formato usado na validação
+
     path = path_humano;
     error_code ec;
-    //Percorre todos os arquivos de teste_humano
     for(auto& entrada : fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec)){
         if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
+        if(!fs::is_regular_file(entrada.status())) continue;
 
-        if(fs::is_regular_file(entrada.status())){
-            ifstream arquivo(entrada.path(), ios::binary);
-            if(!arquivo.is_open()){
-                cerr << "Erro ao abrir: " << entrada.path() << endl;
-                return;
-            }
-            string classe = classificador(modelo_ia,modelo_humano,entrada.path(),false);
-            if(classe == "Humano")corretos_humano++;
-            total_humano++;
-        }
+        ifstream arquivo(entrada.path(), ios::binary);
+        if(!arquivo.is_open()) continue;
+        double comp_ia = comprimento_do_arquivo(arquivo, modelo_ia);
+        arquivo.clear();
+        arquivo.seekg(0);
+        double comp_humano = comprimento_do_arquivo(arquivo, modelo_humano);
+        double score = comp_ia - comp_humano;
+        scores.push_back({score, false});
+
+        if(score >= threshold) corretos_humano++;
+        total_humano++;
     }
-    // TESTE DOS CÓDIGOS GERADOS POR IA
+
     path = path_ia;
     for(auto& entrada : fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec)){
         if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
+        if(!fs::is_regular_file(entrada.status())) continue;
 
-        if(fs::is_regular_file(entrada.status())){
-            ifstream arquivo(entrada.path(), ios::binary);
-            if(!arquivo.is_open()){
-                cerr << "Erro ao abrir: " << entrada.path() << endl;
-                return;
-            }
-            string classe = classificador(modelo_ia,modelo_humano,entrada.path(),false);
-            if(classe == "IA")corretos_ia++;
-            total_ia++;
-        }
+        ifstream arquivo(entrada.path(), ios::binary);
+        if(!arquivo.is_open()) continue;
+        double comp_ia = comprimento_do_arquivo(arquivo, modelo_ia);
+        arquivo.clear();
+        arquivo.seekg(0);
+        double comp_humano = comprimento_do_arquivo(arquivo, modelo_humano);
+        double score = comp_ia - comp_humano;
+        scores.push_back({score, true});
+
+        if(score < threshold) corretos_ia++;
+        total_ia++;
     }
+
     double acuracia_humano = 100.0 * corretos_humano / total_humano;
     double acuracia_ia = 100.0 * corretos_ia / total_ia;
     double acuracia_total = 100.0 * (corretos_humano + corretos_ia) / (total_humano + total_ia);
 
+    cout << "Threshold usado: " << threshold << endl;
     cout << "Humano:    " << corretos_humano << "/" << total_humano << " (" << acuracia_humano << "%)" << endl;
     cout << "IA:        " << corretos_ia << "/" << total_ia << " (" << acuracia_ia << "%)" << endl;
     cout << "Agregada:   " << acuracia_total << "% " << endl;
 }
-
-void teste_geral_tipo(Ppm& modelo_ia,Ppm& modelo_humano, string tipo){
-
-    if(tipo == "c"){
-        teste_geral(modelo_ia,modelo_humano,arquivos_ia[0],arquivos_humano[0]);
-    }else if(tipo == "cpp"){
-        teste_geral(modelo_ia,modelo_humano,arquivos_ia[1],arquivos_humano[1]);
-    }else if(tipo == "java"){
-        teste_geral(modelo_ia,modelo_humano,arquivos_ia[2],arquivos_humano[2]);
-    }else if(tipo == "py"){
-        teste_geral(modelo_ia,modelo_humano,arquivos_ia[3],arquivos_humano[3]);
-    }   
+void teste_geral_tipo(Ppm& modelo_ia, Ppm& modelo_humano, string tipo, double threshold){
+    string path_ia = caminho_dataset("dataset", "ai_teste", tipo);
+    string path_humano = caminho_dataset("dataset", "human_teste", tipo);
+    teste_geral(modelo_ia, modelo_humano, path_ia, path_humano, threshold);
 }
 
-
-void teste_arquivo(Ppm& modelo_ia,Ppm&modelo_humano,string& path_teste){
-    string classe = classificador(modelo_ia,modelo_humano,path_teste,true);
+void teste_arquivo(Ppm& modelo_ia, Ppm& modelo_humano, string& path_teste, double threshold){
+    string classe = classificador(modelo_ia,modelo_humano,path_teste,true,threshold);
     cout << "Arquivo: " << path_teste << " -> Classe: " << classe << endl;
 }
 
@@ -197,7 +173,7 @@ void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
 
     error_code ec;
 
-    // ---- Arquivos HUMANOS ----
+    // Arquivos Humanos
     for(auto& entrada : fs::recursive_directory_iterator(path_humano, fs::directory_options::skip_permission_denied, ec)){
         if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
         if(!fs::is_regular_file(entrada.status())) continue;
@@ -220,7 +196,7 @@ void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
             << "Humano\n";
     }
 
-    // ---- Arquivos IA ----
+    // Arquivos IA
     for(auto& entrada : fs::recursive_directory_iterator(path_ia, fs::directory_options::skip_permission_denied, ec)){
         if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
         if(!fs::is_regular_file(entrada.status())) continue;
@@ -247,15 +223,105 @@ void exporta_csv_comprimentos(Ppm& modelo_ia, Ppm& modelo_humano,
     cout << "[INFO] CSV exportado: " << nome_csv << endl;
 }
 
-void exporta_csv_comprimentos_tipo(Ppm& modelo_ia, Ppm& modelo_humano, const string& tipo)
-{
-    if(tipo == "c"){
-        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[0], arquivos_humano[0], tipo);
-    }else if(tipo == "cpp"){
-        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[1], arquivos_humano[1], tipo);
-    }else if(tipo == "java"){
-        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[2], arquivos_humano[2], tipo);
-    }else if(tipo == "py"){
-        exporta_csv_comprimentos(modelo_ia, modelo_humano, arquivos_ia[3], arquivos_humano[3], tipo);
+void exporta_csv_comprimentos_tipo(Ppm& modelo_ia, Ppm& modelo_humano, const string& tipo){
+    string path_ia = caminho_dataset("dataset", "ai_teste", tipo);
+    string path_humano = caminho_dataset("dataset", "human_teste", tipo);
+    exporta_csv_comprimentos(modelo_ia, modelo_humano, path_ia, path_humano, tipo);
+}
+
+void coleta_scores_flat(Ppm& modelo_ia, Ppm& modelo_humano, const string& path,
+                        bool rotulo_eh_ia, vector<pair<double,bool>>& saida,
+                        const string& prefixo_filtro = ""){
+    error_code ec;
+    for(auto& entrada : fs::directory_iterator(path, fs::directory_options::skip_permission_denied, ec)){
+        if(ec){ cerr << "Erro: " << ec.message() << endl; return; }
+        if(!fs::is_regular_file(entrada.status())) continue;
+
+        // Filtra pelo prefixo do nome do arquivo (ex: "py__") quando a pasta
+        // mistura arquivos de várias linguagens.
+        if(!prefixo_filtro.empty()){
+            string nome_arquivo = entrada.path().filename().string();
+            if(nome_arquivo.rfind(prefixo_filtro, 0) != 0) continue; // não começa com o prefixo
+        }
+
+        ifstream arquivo(entrada.path(), ios::binary);
+        if(!arquivo.is_open()) continue;
+
+        double comp_ia = comprimento_do_arquivo(arquivo, modelo_ia);
+        arquivo.clear();
+        arquivo.seekg(0);
+        double comp_humano = comprimento_do_arquivo(arquivo, modelo_humano);
+
+        double score = comp_ia - comp_humano; // menor => mais "parece IA"
+        saida.push_back({score, rotulo_eh_ia});
     }
+}
+
+// Calcula o threshold ótimo por Youden's J a partir dos scores coletados.
+// Convenção: classifica IA se score < threshold.
+double calcula_threshold_youden(vector<pair<double,bool>>& scores_rotulos){
+    if(scores_rotulos.empty()) return 0.0;
+
+    sort(scores_rotulos.begin(), scores_rotulos.end());
+
+    long long total_ia = 0, total_humano = 0;
+    for(auto& [s, eh_ia] : scores_rotulos)
+        eh_ia ? total_ia++ : total_humano++;
+
+    if(total_ia == 0 || total_humano == 0){
+        cerr << "[AVISO] Uma das classes não tem amostras suficientes para calibrar threshold." << endl;
+        return 0.0;
+    }
+
+    double melhor_threshold = scores_rotulos.front().first;
+    double melhor_j = -1.0;
+
+    long long acumulado_ia = 0, acumulado_humano = 0;
+
+    for(size_t i = 0; i < scores_rotulos.size(); i++){
+        auto [s, eh_ia] = scores_rotulos[i];
+        eh_ia ? acumulado_ia++ : acumulado_humano++;
+
+        bool proximo_diferente = (i + 1 == scores_rotulos.size()) ||
+                                  (scores_rotulos[i+1].first != s);
+        if(!proximo_diferente) continue;
+
+        double tpr = (double)acumulado_ia / total_ia;
+        double fpr = (double)acumulado_humano / total_humano;
+        double j = tpr - fpr;
+
+        if(j > melhor_j){
+            melhor_j = j;
+            double proximo_score = (i + 1 < scores_rotulos.size()) ? scores_rotulos[i+1].first : s + 1.0;
+            melhor_threshold = (s + proximo_score) / 2.0;
+        }
+    }
+
+    cout << "[INFO] Threshold calibrado: " << melhor_threshold
+         << "  (Youden J = " << melhor_j << ")" << endl;
+    return melhor_threshold;
+}
+
+// Calibra o threshold usando dataset_validacao (arquivos nunca vistos no treino).
+double calibra_threshold_validacao(Ppm& modelo_ia, Ppm& modelo_humano,
+                                    const string& path_validacao_ia,
+                                    const string& path_validacao_humano,
+                                    const string& prefixo_filtro = "")
+{
+    vector<pair<double,bool>> scores;
+    coleta_scores_flat(modelo_ia, modelo_humano, path_validacao_ia, true, scores, prefixo_filtro);
+    coleta_scores_flat(modelo_ia, modelo_humano, path_validacao_humano, false, scores, prefixo_filtro);
+    return calcula_threshold_youden(scores);
+}
+
+// Calibra o threshold usando SOMENTE os arquivos de validação da linguagem
+// (tipo) que está sendo testada — as pastas validacao_ia/validacao_human
+// não têm subpasta por linguagem, então filtramos pelo prefixo do nome
+// do arquivo (ex: "py__", "cpp__").
+double calibra_threshold_validacao_tipo(Ppm& modelo_ia, Ppm& modelo_humano, const string& tipo)
+{
+    string path_validacao_ia     = caminho_dataset_flat("dataset_validacao", "validacao_ia");
+    string path_validacao_humano = caminho_dataset_flat("dataset_validacao", "validacao_human");
+    string prefixo = tipo + "__";
+    return calibra_threshold_validacao(modelo_ia, modelo_humano, path_validacao_ia, path_validacao_humano, prefixo);
 }
